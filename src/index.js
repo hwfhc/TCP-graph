@@ -9,16 +9,6 @@
   var packetSpeed = 6;
   var radiusOfNode = 30;
 
-  var locationRuleOfNode = function(x,y){
-    return true;
-    /*if((x < canvasEl.width/2-200 || x > canvasEl.width/2+200) ||
-       (y < canvasEl.height/2-200 || y > canvasEl.height/2+200)){
-         return true;
-       }else{
-         return false
-       }*/
-  }
-
   var NODES = [];
   var PACKETS = [];
   var LINKS = [];
@@ -35,23 +25,53 @@
         NODES.push(this);
       }
 
-      connect(node){
-        this.link = node;
-      }
+      receive(receivedPacket){
+        console.log(receivedPacket.segment);
+        var receive = receivedPacket.segment;
+        var acknum = receive.acknowledgment_number;
+        var seqnum = receive.sequence_number;
 
-      receive(packet){
-        var index = PACKETS.indexOf(packet);
+        if(acknum + seqnum <= 2 || !acknum  ) Three_way_handshake.call(this);
+
+        function Three_way_handshake(){
+          if(receive.SYN){
+            var packet = new Packet(this,this.link);
+
+            if(receive.acknowledgment_number > 0){
+              console.log('TCP connection establish successfully!');
+              packet.segment = {
+                SYN : 0,
+                sequence_number : receive.acknowledgment_number,
+                acknowledgment_number : receive.sequence_number+1
+              };
+            }else{
+              packet.segment = {
+                SYN : 1,
+                sequence_number : 0,
+                acknowledgment_number : receive.sequence_number + 1
+              };
+            }
+          }else{
+            console.log('Three-way handshake OK!');
+          }
+        }
+
+        var index = PACKETS.indexOf(receivedPacket);
         PACKETS.splice(index, 1);
-        if(this.address !== packet.address) this.send(packet.address);
       }
 
-      send(destination){
-        new Packet(this,destination);
+      EstablishConnection(destination){
+        var packet = new Packet(this,destination);
+
+        packet.segment = {
+          SYN : 1,
+          sequence_number : 0,
+        };
       }
   }
 
   class Packet extends EventEmitter{
-      constructor(origin,destination,address){
+      constructor(origin,destination){
         super();
         var distance = Math.sqrt(Math.pow((origin.x - destination.x), 2) + Math.pow((origin.y - destination.y), 2));
 
@@ -59,8 +79,6 @@
         this.destination = destination;
         this.sin = (destination.y - origin.y) / distance;
         this.cos = (destination.x - origin.x) / distance;
-        this.address = address;
-
         this.x = origin.x;
         this.y = origin.y;
 
@@ -95,8 +113,8 @@
         this.destination = destination;
 
         LINKS.push(this);
-        origin.connect(destination);
-        destination.connect(origin);
+        origin.link = destination;
+        destination.link = origin;
       }
   }
 
@@ -157,7 +175,6 @@
   window.onresize();
   window.requestAnimationFrame(calculus);
 
-  NODES[0].send(NODES[1]);
-  console.log(NODES);
+  NODES[0].EstablishConnection(NODES[1]);
 
 })();
